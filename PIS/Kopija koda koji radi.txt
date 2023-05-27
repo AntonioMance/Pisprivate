@@ -1,0 +1,88 @@
+from flask import Flask, request, jsonify
+from pony.orm import Database, Required, PrimaryKey, db_session, select
+
+app = Flask(__name__)
+
+# Connect to a SQLite database file
+db = Database()
+db.bind(provider='sqlite', filename='database.sqlite', create_db=True)
+
+class Movie(db.Entity):
+    id = PrimaryKey(int, auto=True)
+    title = Required(str)
+    director = Required(str)
+    release_year = Required(int)
+    genre = Required(str)
+    synopsis = Required(str)
+
+# Generate the database table if it doesn't exist
+db.generate_mapping(create_tables=True)
+
+@app.route('/movie', methods=['POST'])
+@db_session
+def add_movie():
+    data = request.get_json()
+    movie = Movie(
+        title=data['title'],
+        director=data['director'],
+        release_year=data['release_year'],
+        genre=data['genre'],
+        synopsis=data['synopsis']
+    )
+    db.commit()  # commit the transaction
+    return jsonify(success=True, id=movie.id)
+
+@app.route('/movie/<int:movie_id>', methods=['GET'])
+@db_session
+def get_movie(movie_id):
+    movie = Movie.get(id=movie_id)
+    if movie is None:
+        return {"error": "Movie not found"}, 404
+    return jsonify(
+        id=movie.id,
+        title=movie.title,
+        director=movie.director,
+        release_year=movie.release_year,
+        genre=movie.genre,
+        synopsis=movie.synopsis
+    )
+
+@app.route('/movie/<int:movie_id>', methods=['PUT'])
+@db_session
+def update_movie(movie_id):
+    movie = Movie.get(id=movie_id)
+    if movie is None:
+        return {"error": "Movie not found"}, 404
+    data = request.get_json()
+    movie.title = data.get('title', movie.title)
+    movie.director = data.get('director', movie.director)
+    movie.release_year = data.get('release_year', movie.release_year)
+    movie.genre = data.get('genre', movie.genre)
+    movie.synopsis = data.get('synopsis', movie.synopsis)
+    return jsonify(success=True)
+
+@app.route('/movie/<int:movie_id>', methods=['DELETE'])
+@db_session
+def delete_movie(movie_id):
+    movie = Movie.get(id=movie_id)
+    if movie is None:
+        return {"error": "Movie not found"}, 404
+    movie.delete()
+    return jsonify(success=True)
+
+@app.route('/movies', methods=['GET'])
+@db_session
+def get_movies_by_genre():
+    genre = request.args.get('genre')
+    if not genre:
+        return {"error": "Missing genre parameter"}, 400
+    movies = select(m for m in Movie if m.genre == genre)[:]
+    movies_list = [m.to_dict() for m in movies]
+    return jsonify(movies_list)
+
+@app.route('/')
+def hello_world():
+    return 'Hello, World!'
+
+if __name__ == '__main__':
+    app.run(debug=True)
