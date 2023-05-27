@@ -1,0 +1,5 @@
+Skinut python 3.9
+pip install flask
+pip install pony
+
+i sve bi trebalo radit
